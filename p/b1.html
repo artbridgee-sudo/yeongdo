@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0a2b3d">
+<title>영도 블루투어 · 국립해양박물관</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=Gowun+Dodum&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --accent: #2d5a7a;
+    --deep: #0a2b3d;
+    --foam: #eaf4f7;
+    --sand: #f5efe6;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html, body { height:100%; }
+  body {
+    font-family:'Gowun Dodum', sans-serif;
+    background:
+      radial-gradient(120% 80% at 50% -10%, rgba(94,182,209,0.35) 0%, transparent 55%),
+      linear-gradient(180deg, #0a2b3d 0%, #103a52 45%, #0a2b3d 100%);
+    color:var(--foam);
+    min-height:100dvh;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    padding:28px 22px calc(28px + env(safe-area-inset-bottom));
+    overflow-x:hidden;
+    position:relative;
+  }
+  /* 물결 배경 */
+  .waves { position:fixed; bottom:0; left:0; width:100%; height:160px; opacity:0.35; pointer-events:none; z-index:0; }
+  .waves svg { width:200%; height:100%; animation:drift 14s linear infinite; }
+  @keyframes drift { from{transform:translateX(0)} to{transform:translateX(-50%)} }
+
+  .card {
+    position:relative; z-index:1;
+    width:100%; max-width:420px;
+    text-align:center;
+    animation:rise 0.9s cubic-bezier(.2,.7,.2,1) both;
+  }
+  @keyframes rise { from{opacity:0; transform:translateY(24px)} to{opacity:1; transform:translateY(0)} }
+
+  .brand {
+    font-size:0.78rem; letter-spacing:0.35em; text-transform:uppercase;
+    color:#9fd4e3; margin-bottom:6px; padding-left:0.35em;
+  }
+  .course-tag {
+    display:inline-block; margin-bottom:30px;
+    font-size:0.8rem; letter-spacing:0.05em;
+    color:#cfe8f0; border:1px solid rgba(159,212,227,0.4);
+    border-radius:999px; padding:5px 16px;
+  }
+  .point-no {
+    font-family:'Gowun Batang', serif;
+    font-size:0.9rem; color:#7fb8cc; letter-spacing:0.2em; margin-bottom:10px;
+  }
+  h1 {
+    font-family:'Gowun Batang', serif; font-weight:700;
+    font-size:2.3rem; line-height:1.25; margin-bottom:16px;
+    text-shadow:0 2px 20px rgba(0,0,0,0.3);
+  }
+  .intro {
+    font-size:1rem; line-height:1.7; color:#d6e9ef;
+    margin-bottom:38px; padding:0 6px;
+  }
+
+  /* 재생 버튼 */
+  .player {
+    display:flex; flex-direction:column; align-items:center; gap:18px;
+  }
+  .play-btn {
+    width:96px; height:96px; border-radius:50%;
+    border:none; cursor:pointer;
+    background:linear-gradient(145deg, #5eb6d1, #1a6b8a);
+    box-shadow:0 10px 30px rgba(26,107,138,0.5), inset 0 2px 6px rgba(255,255,255,0.3);
+    display:flex; align-items:center; justify-content:center;
+    position:relative; transition:transform 0.2s, box-shadow 0.2s;
+  }
+  .play-btn:active { transform:scale(0.94); }
+  .play-btn::before {
+    content:''; position:absolute; inset:-8px; border-radius:50%;
+    border:2px solid rgba(159,212,227,0.5);
+    animation:pulse 2.4s ease-out infinite;
+  }
+  @keyframes pulse { 0%{transform:scale(1); opacity:0.7} 100%{transform:scale(1.35); opacity:0} }
+  .play-btn.playing::before { animation-duration:1.2s; }
+  .icon { width:38px; height:38px; fill:#fff; margin-left:4px; }
+  .icon.pause { margin-left:0; }
+
+  .status { font-size:0.9rem; color:#9fd4e3; min-height:1.2em; letter-spacing:0.05em; }
+
+  /* 진행 바 */
+  .progress-wrap {
+    width:100%; max-width:300px; margin-top:4px;
+  }
+  .progress-bar {
+    width:100%; height:5px; background:rgba(255,255,255,0.15);
+    border-radius:999px; overflow:hidden; cursor:pointer;
+  }
+  .progress-fill { height:100%; width:0%; background:linear-gradient(90deg,#9fd4e3,#5eb6d1); border-radius:999px; transition:width 0.1s linear; }
+  .time-row { display:flex; justify-content:space-between; font-size:0.75rem; color:#7fb8cc; margin-top:7px; }
+
+  .footer {
+    margin-top:46px; font-size:0.72rem; color:#5a8ba0; letter-spacing:0.1em;
+  }
+  .footer .dot { margin:0 8px; opacity:0.5; }
+</style>
+</head>
+<body>
+<div class="waves">
+  <svg viewBox="0 0 1440 160" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+    <path fill="#5eb6d1" d="M0,64 C240,128 480,0 720,48 C960,96 1200,16 1440,64 L1440,160 L0,160 Z"></path>
+    <path fill="#5eb6d1" d="M1440,64 C1680,128 1920,0 2160,48 C2400,96 2640,16 2880,64 L2880,160 L1440,160 Z"></path>
+  </svg>
+</div>
+
+<main class="card">
+  <div class="brand">YEONGDO BLUE TOUR</div>
+  <div class="course-tag">B코스 · 시간이 쌓인 길</div>
+  <div class="point-no">01번째 이야기</div>
+  <h1>국립해양박물관</h1>
+  <p class="intro">바다의 역사와 문화를 담은 공간</p>
+
+  <div class="player">
+    <button class="play-btn" id="playBtn" aria-label="재생">
+      <svg class="icon play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+    </button>
+    <div class="status" id="status">버튼을 눌러 해설을 들어보세요</div>
+    <div class="progress-wrap">
+      <div class="progress-bar" id="progressBar"><div class="progress-fill" id="progressFill"></div></div>
+      <div class="time-row"><span id="curTime">0:00</span><span id="durTime">0:00</span></div>
+    </div>
+  </div>
+
+  <div class="footer">영도를 물들이다<span class="dot">·</span>해양문화콘텐츠융복합전공</div>
+</main>
+
+<audio id="audio" preload="metadata" src="../audio/b1_museum_guide.mp3"></audio>
+
+<script>
+  const audio = document.getElementById('audio');
+  const btn = document.getElementById('playBtn');
+  const status = document.getElementById('status');
+  const fill = document.getElementById('progressFill');
+  const bar = document.getElementById('progressBar');
+  const curT = document.getElementById('curTime');
+  const durT = document.getElementById('durTime');
+
+  const playSVG = '<svg class="icon play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
+  const pauseSVG = '<svg class="icon pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>';
+
+  function fmt(s) {
+    if (isNaN(s)) return '0:00';
+    const m = Math.floor(s/60); const sec = Math.floor(s%60);
+    return m + ':' + String(sec).padStart(2,'0');
+  }
+
+  audio.addEventListener('loadedmetadata', () => { durT.textContent = fmt(audio.duration); });
+
+  btn.addEventListener('click', () => {
+    if (audio.paused) { audio.play(); } else { audio.pause(); }
+  });
+
+  audio.addEventListener('play', () => {
+    btn.innerHTML = pauseSVG; btn.classList.add('playing');
+    status.textContent = '재생 중…';
+  });
+  audio.addEventListener('pause', () => {
+    btn.innerHTML = playSVG; btn.classList.remove('playing');
+    status.textContent = '일시정지';
+  });
+  audio.addEventListener('ended', () => {
+    btn.innerHTML = playSVG; btn.classList.remove('playing');
+    status.textContent = '해설이 끝났습니다';
+    fill.style.width = '0%';
+  });
+  audio.addEventListener('timeupdate', () => {
+    const p = (audio.currentTime / audio.duration) * 100;
+    fill.style.width = (p||0) + '%';
+    curT.textContent = fmt(audio.currentTime);
+  });
+  bar.addEventListener('click', (e) => {
+    const rect = bar.getBoundingClientRect();
+    const ratio = (e.clientX - rect.left) / rect.width;
+    audio.currentTime = ratio * audio.duration;
+  });
+</script>
+</body>
+</html>
