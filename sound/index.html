@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#07263a">
+<title>영도 사운드스케이프 · 영도의 소리를 채집한다</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=Gowun+Dodum&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#07263a; --bg2:#0e3a54; --foam:#eaf4f7; --aqua:#5eb6d1;
+    --aqua-soft:#9fd4e3; --ink:#0a2b3d; --gold:#e8c97a;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+  body{
+    font-family:'Gowun Dodum',sans-serif; color:var(--foam);
+    background:
+      radial-gradient(130% 70% at 50% -5%, rgba(94,182,209,0.28) 0%, transparent 55%),
+      linear-gradient(180deg,#07263a 0%,#0e3a54 48%,#07263a 100%);
+    min-height:100dvh; overflow-x:hidden;
+  }
+  .app{max-width:440px; margin:0 auto; padding:26px 20px calc(40px + env(safe-area-inset-bottom)); position:relative; z-index:2;}
+
+  /* 배경 물결 */
+  .waves{position:fixed;bottom:0;left:0;width:100%;height:150px;opacity:0.3;pointer-events:none;z-index:0;}
+  .waves svg{width:200%;height:100%;animation:drift 16s linear infinite;}
+  @keyframes drift{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+
+  header{text-align:center; margin-bottom:26px;}
+  .brand{font-size:0.72rem;letter-spacing:0.35em;color:var(--aqua-soft);padding-left:0.35em;}
+  h1{font-family:'Gowun Batang',serif;font-weight:700;font-size:1.85rem;margin:6px 0 4px;letter-spacing:-0.01em;}
+  .tag{font-size:0.86rem;color:#cfe8f0;}
+
+  /* 진행 단계 */
+  .steps{display:flex;justify-content:center;gap:8px;margin:20px 0 24px;}
+  .step{display:flex;align-items:center;gap:8px;}
+  .dot{width:26px;height:26px;border-radius:50%;border:1.5px solid rgba(159,212,227,0.4);
+    display:flex;align-items:center;justify-content:center;font-size:0.78rem;color:var(--aqua-soft);transition:.3s;}
+  .step.active .dot{background:var(--aqua);border-color:var(--aqua);color:#fff;}
+  .step.done .dot{background:rgba(94,182,209,0.25);border-color:var(--aqua);color:var(--aqua-soft);}
+  .step .lbl{font-size:0.74rem;color:var(--aqua-soft);}
+  .step .bar{width:14px;height:1.5px;background:rgba(159,212,227,0.3);}
+
+  .panel{display:none;animation:fade .5s ease both;}
+  .panel.show{display:block;}
+  @keyframes fade{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+
+  .section-title{font-family:'Gowun Batang',serif;font-size:1.05rem;margin-bottom:4px;}
+  .section-sub{font-size:0.82rem;color:var(--aqua-soft);margin-bottom:18px;line-height:1.6;}
+
+  /* 지점 카드 */
+  .spot{background:rgba(255,255,255,0.045);border:1px solid rgba(159,212,227,0.16);
+    border-radius:18px;padding:16px 16px 18px;margin-bottom:14px;transition:.25s;position:relative;overflow:hidden;}
+  .spot.captured{border-color:rgba(94,182,209,0.6);background:rgba(94,182,209,0.1);}
+  .spot-head{display:flex;align-items:center;gap:12px;margin-bottom:4px;}
+  .spot-icon{width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.3rem;flex-shrink:0;}
+  .spot-name{font-size:1.05rem;font-weight:bold;}
+  .spot-type{font-size:0.76rem;color:var(--aqua-soft);}
+  .spot-desc{font-size:0.78rem;color:#bcd9e3;margin:2px 0 14px;padding-left:54px;}
+
+  .rec-row{display:flex;align-items:center;gap:12px;padding-left:54px;}
+  .rec-btn{flex:1;border:none;border-radius:12px;padding:11px;font-family:inherit;font-size:0.9rem;
+    cursor:pointer;color:#fff;display:flex;align-items:center;justify-content:center;gap:8px;transition:.2s;}
+  .rec-btn.idle{background:linear-gradient(135deg,#5eb6d1,#1a6b8a);}
+  .rec-btn.recording{background:linear-gradient(135deg,#e2725b,#a8331f);}
+  .rec-btn.done{background:rgba(94,182,209,0.18);color:var(--aqua-soft);border:1px solid rgba(94,182,209,0.5);}
+  .rec-btn:active{transform:scale(0.97);}
+  .rec-dot{width:9px;height:9px;border-radius:50%;background:#fff;}
+  .rec-btn.recording .rec-dot{animation:blink .8s infinite;}
+  @keyframes blink{50%{opacity:0.2}}
+  .play-mini{width:42px;height:42px;border-radius:12px;border:1px solid rgba(159,212,227,0.4);
+    background:transparent;color:var(--aqua-soft);font-size:1rem;cursor:pointer;flex-shrink:0;transition:.2s;}
+  .play-mini:active{transform:scale(0.94);}
+  .play-mini:disabled{opacity:0.3;}
+
+  /* 파형 */
+  .wave-vis{height:34px;margin:10px 0 0 54px;display:flex;align-items:center;gap:2px;}
+  .wave-vis .b{flex:1;background:var(--aqua);border-radius:2px;height:3px;transition:height .1s;opacity:0.7;}
+
+  .timer{font-size:0.78rem;color:var(--gold);min-width:42px;text-align:center;}
+
+  /* 하단 버튼 */
+  .next-btn{width:100%;margin-top:8px;border:none;border-radius:14px;padding:15px;
+    font-family:'Gowun Batang',serif;font-size:1rem;font-weight:bold;cursor:pointer;transition:.2s;
+    background:linear-gradient(135deg,#5eb6d1,#1a6b8a);color:#fff;}
+  .next-btn:active{transform:scale(0.98);}
+  .next-btn:disabled{opacity:0.4;cursor:not-allowed;}
+  .hint{text-align:center;font-size:0.74rem;color:var(--aqua-soft);margin-top:10px;min-height:1em;}
+
+  /* 믹싱 화면 */
+  .mix-stage{text-align:center;padding:10px 0;}
+  .vinyl{width:180px;height:180px;border-radius:50%;margin:8px auto 24px;position:relative;
+    background:radial-gradient(circle at 50% 50%, #0a2b3d 0 18%, #11405c 18% 22%, #0a2b3d 22% 100%);
+    border:6px solid rgba(159,212,227,0.2);box-shadow:0 14px 40px rgba(0,0,0,0.4);}
+  .vinyl::after{content:'';position:absolute;inset:0;border-radius:50%;
+    background:repeating-radial-gradient(circle at 50% 50%, transparent 0 5px, rgba(159,212,227,0.05) 5px 6px);}
+  .vinyl.spin{animation:spin 4s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .vinyl .center{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+    font-family:'Gowun Batang',serif;font-size:0.8rem;color:var(--aqua-soft);z-index:2;}
+
+  .layer-list{text-align:left;margin:0 auto 22px;max-width:300px;}
+  .layer{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid rgba(159,212,227,0.12);font-size:0.86rem;}
+  .layer .ic{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:0.95rem;flex-shrink:0;}
+  .layer .nm{flex:1;}
+  .layer .toggle{width:40px;height:22px;border-radius:999px;background:rgba(255,255,255,0.15);position:relative;cursor:pointer;transition:.2s;}
+  .layer .toggle.on{background:var(--aqua);}
+  .layer .toggle::after{content:'';position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:#fff;transition:.2s;}
+  .layer .toggle.on::after{left:20px;}
+
+  .bg-pick{display:flex;gap:8px;justify-content:center;margin-bottom:22px;flex-wrap:wrap;}
+  .bg-chip{border:1px solid rgba(159,212,227,0.35);background:transparent;color:var(--aqua-soft);
+    border-radius:999px;padding:7px 15px;font-family:inherit;font-size:0.8rem;cursor:pointer;transition:.2s;}
+  .bg-chip.on{background:var(--aqua);color:#fff;border-color:var(--aqua);}
+
+  .big-play{width:74px;height:74px;border-radius:50%;border:none;cursor:pointer;margin:4px auto 18px;display:flex;align-items:center;justify-content:center;
+    background:linear-gradient(145deg,#5eb6d1,#1a6b8a);box-shadow:0 10px 28px rgba(26,107,138,0.5);transition:.2s;}
+  .big-play:active{transform:scale(0.94);}
+  .big-play svg{width:30px;height:30px;fill:#fff;}
+
+  .result-card{background:rgba(255,255,255,0.05);border:1px solid rgba(159,212,227,0.2);border-radius:18px;padding:22px 18px;margin-top:6px;}
+  .result-card h2{font-family:'Gowun Batang',serif;font-size:1.2rem;margin-bottom:6px;}
+  .result-card p{font-size:0.82rem;color:#bcd9e3;line-height:1.7;margin-bottom:18px;}
+  .dl-btn{display:inline-flex;align-items:center;gap:8px;border:none;border-radius:12px;padding:13px 26px;
+    font-family:inherit;font-size:0.92rem;cursor:pointer;background:var(--gold);color:#5a4410;font-weight:bold;transition:.2s;}
+  .dl-btn:active{transform:scale(0.97);}
+
+  .footer{text-align:center;margin-top:30px;font-size:0.7rem;color:#5a8ba0;letter-spacing:0.08em;}
+  .ghost-btn{display:block;margin:14px auto 0;background:transparent;border:none;color:var(--aqua-soft);font-family:inherit;font-size:0.8rem;cursor:pointer;text-decoration:underline;opacity:0.8;}
+</style>
+</head>
+<body>
+<div class="waves">
+  <svg viewBox="0 0 1440 150" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+    <path fill="#5eb6d1" d="M0,60 C240,120 480,0 720,44 C960,90 1200,14 1440,60 L1440,150 L0,150 Z"></path>
+    <path fill="#5eb6d1" d="M1440,60 C1680,120 1920,0 2160,44 C2400,90 2640,14 2880,60 L2880,150 L1440,150 Z"></path>
+  </svg>
+</div>
+
+<div class="app">
+  <header>
+    <div class="brand">YEONGDO SOUNDSCAPE</div>
+    <h1>영도의 소리를 채집한다</h1>
+    <div class="tag">걸으며 모은 소리로 나만의 음원을 만든다</div>
+  </header>
+
+  <div class="steps">
+    <div class="step active" id="st1"><div class="dot">1</div><div class="lbl">채집</div></div>
+    <div class="bar"></div>
+    <div class="step" id="st2"><div class="dot">2</div><div class="lbl">믹싱</div></div>
+    <div class="bar"></div>
+    <div class="step" id="st3"><div class="dot">3</div><div class="lbl">완성</div></div>
+  </div>
+
+  <!-- STEP 1: 채집 -->
+  <section class="panel show" id="panel1">
+    <div class="section-title">지점별 소리 채집</div>
+    <div class="section-sub">각 지점에서 30초씩 소리를 녹음하세요.<br>마이크가 어려우면 '샘플 소리'로 채집할 수 있어요.</div>
+    <div id="spotList"></div>
+    <button class="next-btn" id="toMix" disabled>모은 소리로 믹싱하기 →</button>
+    <div class="hint" id="hint1">소리를 1개 이상 채집하면 다음으로 넘어갈 수 있어요</div>
+  </section>
+
+  <!-- STEP 2: 믹싱 -->
+  <section class="panel" id="panel2">
+    <div class="section-title">나만의 음원 믹싱</div>
+    <div class="section-sub">채집한 소리를 겹쳐 듣고, 바다 배경음을 더해보세요.</div>
+    <div class="mix-stage">
+      <div class="vinyl" id="vinyl"><span class="center">YEONGDO<br>MIX</span></div>
+    </div>
+    <div class="layer-list" id="layerList"></div>
+    <div style="font-size:0.8rem;color:var(--aqua-soft);text-align:center;margin-bottom:10px;">바다 배경음</div>
+    <div class="bg-pick" id="bgPick"></div>
+    <button class="big-play" id="mixPlay" aria-label="재생">
+      <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+    </button>
+    <button class="next-btn" id="toDone">이 음원으로 완성하기 →</button>
+    <button class="ghost-btn" id="backTo1">← 채집 화면으로</button>
+  </section>
+
+  <!-- STEP 3: 완성 -->
+  <section class="panel" id="panel3">
+    <div class="result-card" style="text-align:center;">
+      <h2>나만의 영도 음원이 완성됐어요</h2>
+      <p>오늘 걸으며 모은 영도의 소리가<br>하나의 음원이 되었습니다.<br>투어의 기억을 소리로 가져가세요.</p>
+      <div class="vinyl spin" id="vinyl2" style="width:130px;height:130px;margin:0 auto 22px;"><span class="center">YEONGDO<br>MIX</span></div>
+      <button class="dl-btn" id="dlBtn">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="#5a4410"><path d="M12 16l-5-5h3V4h4v7h3l-5 5zm-7 2h14v2H5z"/></svg>
+        음원 파일 내려받기
+      </button>
+      <div class="hint" id="hint3" style="margin-top:14px;">완성된 소리를 다시 들어보세요</div>
+    </div>
+    <button class="ghost-btn" id="restart">처음부터 다시 만들기</button>
+  </section>
+
+  <div class="footer">영도 블루투어 · 프리미엄 코스 사운드스케이프</div>
+</div>
+
+<script>
+/* ============== 영도 사운드스케이프 데모 ============== */
+const SPOTS = [
+  {id:'industry', name:'깡깡이마을', type:'산업의 소리', desc:'망치 · 용접 · 엔진', icon:'🔨', color:'#c0704a'},
+  {id:'harbor',   name:'남항대교',   type:'항구의 소리', desc:'배 기적 · 항구 소음', icon:'⚓', color:'#3d6e8c'},
+  {id:'life',     name:'흰여울마을', type:'삶의 소리',   desc:'골목 바람 · 발자국', icon:'🚶', color:'#7a9a6b'},
+  {id:'sea',      name:'절영해안',   type:'바다의 소리', desc:'파도 · 갈매기',     icon:'🌊', color:'#2f88a8'},
+];
+
+let AC = null;
+function ac(){ if(!AC) AC = new (window.AudioContext||window.webkitAudioContext)(); if(AC.state==='suspended') AC.resume(); return AC; }
+
+/* ---- 합성 사운드: 지점별 특성 음향을 코드로 생성 ---- */
+function makeBuffer(seconds, fillFn){
+  const sr = 44100, ctx = ac();
+  const buf = ctx.createBuffer(1, Math.floor(sr*seconds), sr);
+  const d = buf.getChannelData(0);
+  fillFn(d, sr);
+  return buf;
+}
+function noise(d){ for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1; }
+
+const SYNTH = {
+  industry:(sec)=>makeBuffer(sec,(d,sr)=>{
+    for(let i=0;i<d.length;i++){const t=i/sr;
+      let v=(Math.random()*2-1)*0.12;
+      // 주기적 망치 타격
+      const beat=t%0.9; if(beat<0.04) v+=Math.sin(2*Math.PI*180*t)*Math.exp(-beat*60)*0.6;
+      // 낮은 엔진 험
+      v+=Math.sin(2*Math.PI*60*t)*0.06+Math.sin(2*Math.PI*90*t)*0.04;
+      d[i]=v;}
+  }),
+  harbor:(sec)=>makeBuffer(sec,(d,sr)=>{
+    for(let i=0;i<d.length;i++){const t=i/sr;
+      let v=(Math.random()*2-1)*0.05;
+      // 뱃고동(저음 길게)
+      const horn=t%4; if(horn<1.2){const e=Math.sin(Math.PI*horn/1.2); v+=(Math.sin(2*Math.PI*110*t)+Math.sin(2*Math.PI*138*t))*0.18*e;}
+      // 물결 저주파
+      v+=Math.sin(2*Math.PI*40*t)*0.05;
+      d[i]=v;}
+  }),
+  life:(sec)=>makeBuffer(sec,(d,sr)=>{
+    // 바람 + 가끔 발자국
+    let lp=0;
+    for(let i=0;i<d.length;i++){const t=i/sr;
+      const n=Math.random()*2-1; lp+=(n-lp)*0.04; // 저역 통과 = 바람
+      let v=lp*0.5;
+      const step=t%1.1; if(step<0.02) v+=(Math.random()*2-1)*0.4*Math.exp(-step*120);
+      d[i]=v;}
+  }),
+  sea:(sec)=>makeBuffer(sec,(d,sr)=>{
+    let lp=0;
+    for(let i=0;i<d.length;i++){const t=i/sr;
+      const n=Math.random()*2-1; lp+=(n-lp)*0.02;
+      // 파도 밀려옴(천천히 차오르는 진폭)
+      const swell=0.5+0.5*Math.sin(2*Math.PI*0.12*t);
+      let v=lp*swell*0.6;
+      // 갈매기 끼룩(가끔)
+      const g=t%5.3; if(g<0.3){v+=Math.sin(2*Math.PI*(1400+Math.sin(t*30)*300)*t)*0.12*Math.sin(Math.PI*g/0.3);}
+      d[i]=v;}
+  }),
+};
+const BG_SYNTH = {
+  none:null,
+  wave:(sec)=>SYNTH.sea(sec),
+  gull:(sec)=>makeBuffer(sec,(d,sr)=>{
+    let lp=0;
+    for(let i=0;i<d.length;i++){const t=i/sr; const n=Math.random()*2-1; lp+=(n-lp)*0.03;
+      let v=lp*0.25; const g=t%2.7; if(g<0.25)v+=Math.sin(2*Math.PI*(1600+Math.sin(t*40)*400)*t)*0.18*Math.sin(Math.PI*g/0.25); d[i]=v;}
+  }),
+  ship:(sec)=>makeBuffer(sec,(d,sr)=>{
+    for(let i=0;i<d.length;i++){const t=i/sr;let v=Math.sin(2*Math.PI*42*t)*0.08;
+      const h=t%6; if(h<1.5){const e=Math.sin(Math.PI*h/1.5);v+=(Math.sin(2*Math.PI*105*t)+Math.sin(2*Math.PI*132*t))*0.16*e;} d[i]=v;}
+  }),
+};
+
+/* ---- 상태 ---- */
+const captured = {};      // id -> {buffer, source}
+const layerOn = {};       // id -> bool
+let bgChoice = 'wave';
+let recState = {};        // id -> 'idle'|'recording'|'done'
+let mediaRec = null, micChunks = [], micStream=null;
+
+/* ---- STEP1 UI ---- */
+const spotList = document.getElementById('spotList');
+SPOTS.forEach(s=>{
+  recState[s.id]='idle';
+  const el = document.createElement('div');
+  el.className='spot'; el.id='spot-'+s.id;
+  el.innerHTML = `
+    <div class="spot-head">
+      <div class="spot-icon" style="background:${s.color}33;">${s.icon}</div>
+      <div><div class="spot-name">${s.name}</div><div class="spot-type">${s.type}</div></div>
+    </div>
+    <div class="spot-desc">${s.desc}</div>
+    <div class="rec-row">
+      <button class="rec-btn idle" data-id="${s.id}" id="rec-${s.id}">
+        <span class="rec-dot"></span><span class="rl">녹음 시작</span>
+      </button>
+      <span class="timer" id="tm-${s.id}"></span>
+      <button class="play-mini" id="pm-${s.id}" disabled>▶</button>
+    </div>
+    <div class="wave-vis" id="wv-${s.id}" style="display:none;">${Array(28).fill('<span class="b"></span>').join('')}</div>
+  `;
+  spotList.appendChild(el);
+});
+
+/* 녹음 / 샘플 채집 로직 */
+let timers={};
+function startCapture(id){
+  const s = SPOTS.find(x=>x.id===id);
+  const btn = document.getElementById('rec-'+id);
+  const wv = document.getElementById('wv-'+id);
+  recState[id]='recording';
+  btn.className='rec-btn recording';
+  btn.querySelector('.rl').textContent='녹음 중… (탭하면 정지)';
+  wv.style.display='flex';
+  ac();
+  let sec=0, max=30;
+  const tm=document.getElementById('tm-'+id);
+  tm.textContent='0:30';
+  // 파형 애니메이션
+  const bars=wv.querySelectorAll('.b');
+  const waveAnim=setInterval(()=>{bars.forEach(b=>b.style.height=(3+Math.random()*28)+'px');},90);
+  timers[id]=setInterval(()=>{sec++; tm.textContent='0:'+String(Math.max(0,max-sec)).padStart(2,'0');
+    if(sec>=max) stopCapture(id);},1000);
+
+  // 마이크 시도 (실패 시 샘플로 자동 대체)
+  if(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder){
+    navigator.mediaDevices.getUserMedia({audio:true}).then(stream=>{
+      micStream=stream; micChunks=[];
+      try{ mediaRec=new MediaRecorder(stream);}catch(e){mediaRec=null;}
+      if(mediaRec){
+        mediaRec.ondataavailable=e=>micChunks.push(e.data);
+        mediaRec.onstop=()=>{
+          const blob=new Blob(micChunks,{type:'audio/webm'});
+          blob.arrayBuffer().then(ab=>ac().decodeAudioData(ab)).then(buf=>{
+            captured[id]={buffer:buf, isMic:true};
+          }).catch(()=>{ captured[id]={buffer:SYNTH[id](6), isMic:false}; });
+        };
+        mediaRec.start();
+      }
+    }).catch(()=>{ /* 권한 거부 → 정지 시 샘플 사용 */ });
+  }
+  btn._cleanup=()=>{clearInterval(waveAnim);};
+}
+function stopCapture(id){
+  if(recState[id]!=='recording') return;
+  clearInterval(timers[id]);
+  const btn=document.getElementById('rec-'+id);
+  if(btn._cleanup)btn._cleanup();
+  const wv=document.getElementById('wv-'+id);
+  // 파형 고정(채집 완료 표시)
+  wv.querySelectorAll('.b').forEach(b=>{b.style.height=(4+Math.random()*22)+'px';b.style.opacity='0.45';});
+
+  if(mediaRec && mediaRec.state==='recording'){ mediaRec.stop(); if(micStream)micStream.getTracks().forEach(t=>t.stop()); }
+  // 마이크 실패/미지원 대비: 0.4초 후 buffer 없으면 합성 샘플
+  setTimeout(()=>{ if(!captured[id]) captured[id]={buffer:SYNTH[id](6), isMic:false}; },450);
+
+  recState[id]='done';
+  btn.className='rec-btn done';
+  btn.querySelector('.rl').textContent='채집 완료 · 다시 녹음';
+  btn.querySelector('.rec-dot').style.display='none';
+  document.getElementById('tm-'+id).textContent='';
+  document.getElementById('pm-'+id).disabled=false;
+  document.getElementById('spot-'+id).classList.add('captured');
+  layerOn[id]=true;
+  updateNext();
+}
+let previewSrc=null;
+function previewSpot(id){
+  if(!captured[id]) return;
+  if(previewSrc){try{previewSrc.stop();}catch(e){}}
+  const ctx=ac(); previewSrc=ctx.createBufferSource();
+  previewSrc.buffer=captured[id].buffer; previewSrc.connect(ctx.destination); previewSrc.start();
+}
+function updateNext(){
+  const n=Object.keys(captured).length;
+  const btn=document.getElementById('toMix');
+  btn.disabled=n<1;
+  document.getElementById('hint1').textContent = n<1 ? '소리를 1개 이상 채집하면 다음으로 넘어갈 수 있어요' : `${n}개 소리를 채집했어요 · 더 모으거나 믹싱으로 넘어가세요`;
+}
+spotList.addEventListener('click',e=>{
+  const rec=e.target.closest('.rec-btn'); const pm=e.target.closest('.play-mini');
+  if(rec){const id=rec.dataset.id; if(recState[id]==='recording')stopCapture(id); else startCapture(id);}
+  if(pm){const id=pm.id.replace('pm-',''); previewSpot(id);}
+});
+
+/* ---- STEP 전환 ---- */
+function goStep(n){
+  [1,2,3].forEach(i=>{
+    document.getElementById('panel'+i).classList.toggle('show', i===n);
+    const st=document.getElementById('st'+i);
+    st.classList.toggle('active', i===n);
+    st.classList.toggle('done', i<n);
+  });
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+/* ---- STEP2 믹싱 UI ---- */
+const layerList=document.getElementById('layerList');
+const bgPick=document.getElementById('bgPick');
+function buildMixUI(){
+  layerList.innerHTML='';
+  SPOTS.filter(s=>captured[s.id]).forEach(s=>{
+    if(layerOn[s.id]===undefined)layerOn[s.id]=true;
+    const row=document.createElement('div'); row.className='layer';
+    row.innerHTML=`<div class="ic" style="background:${s.color}33">${s.icon}</div>
+      <div class="nm">${s.name} <span style="color:var(--aqua-soft);font-size:0.78rem">· ${s.type}</span></div>
+      <div class="toggle ${layerOn[s.id]?'on':''}" data-id="${s.id}"></div>`;
+    layerList.appendChild(row);
+  });
+  const bgs=[['wave','파도'],['gull','갈매기'],['ship','뱃고동'],['none','없음']];
+  bgPick.innerHTML='';
+  bgs.forEach(([k,lbl])=>{
+    const c=document.createElement('button'); c.className='bg-chip'+(bgChoice===k?' on':'');
+    c.textContent=lbl; c.dataset.bg=k; bgPick.appendChild(c);
+  });
+}
+layerList.addEventListener('click',e=>{const t=e.target.closest('.toggle');if(t){const id=t.dataset.id;layerOn[id]=!layerOn[id];t.classList.toggle('on',layerOn[id]);}});
+bgPick.addEventListener('click',e=>{const c=e.target.closest('.bg-chip');if(c){bgChoice=c.dataset.bg;bgPick.querySelectorAll('.bg-chip').forEach(x=>x.classList.remove('on'));c.classList.add('on');}});
+
+/* ---- 믹스 재생 (실시간 레이어 합성) ---- */
+let mixSources=[], mixPlaying=false;
+function playMix(){
+  stopMix();
+  const ctx=ac(); const master=ctx.createGain(); master.gain.value=0.9; master.connect(ctx.destination);
+  const active=SPOTS.filter(s=>captured[s.id]&&layerOn[s.id]);
+  active.forEach(s=>{
+    const src=ctx.createBufferSource(); src.buffer=captured[s.id].buffer; src.loop=true;
+    const g=ctx.createGain(); g.gain.value=0.55;
+    src.connect(g); g.connect(master); src.start(); mixSources.push(src);
+  });
+  if(bgChoice!=='none' && BG_SYNTH[bgChoice]){
+    const src=ctx.createBufferSource(); src.buffer=BG_SYNTH[bgChoice](8); src.loop=true;
+    const g=ctx.createGain(); g.gain.value=0.4; src.connect(g); g.connect(master); src.start(); mixSources.push(src);
+  }
+  mixPlaying=true;
+  document.getElementById('vinyl').classList.add('spin');
+  setPlayIcon(true);
+}
+function stopMix(){
+  mixSources.forEach(s=>{try{s.stop();}catch(e){}}); mixSources=[];
+  mixPlaying=false; document.getElementById('vinyl').classList.remove('spin'); setPlayIcon(false);
+}
+function setPlayIcon(playing){
+  document.getElementById('mixPlay').innerHTML = playing
+    ? '<svg viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>'
+    : '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
+}
+document.getElementById('mixPlay').addEventListener('click',()=>{ mixPlaying?stopMix():playMix(); });
+
+/* ---- 내비게이션 ---- */
+document.getElementById('toMix').addEventListener('click',()=>{buildMixUI();goStep(2);});
+document.getElementById('backTo1').addEventListener('click',()=>{stopMix();goStep(1);});
+document.getElementById('toDone').addEventListener('click',()=>{stopMix();renderDone();goStep(3);});
+document.getElementById('restart').addEventListener('click',()=>{location.reload();});
+
+/* ---- STEP3: 음원 생성 & 다운로드 ---- */
+let renderedBlob=null, donePlaySrc=null;
+function renderDone(){
+  document.getElementById('vinyl2').classList.add('spin');
+}
+document.getElementById('dlBtn').addEventListener('click',async()=>{
+  const btn=document.getElementById('dlBtn');
+  btn.innerHTML='음원 만드는 중…';
+  try{
+    const blob=await renderWav();
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a'); a.href=url; a.download='영도_사운드스케이프_나만의음원.wav'; a.click();
+    setTimeout(()=>URL.revokeObjectURL(url),4000);
+    document.getElementById('hint3').textContent='내려받기 완료! 폰의 파일/다운로드 폴더를 확인하세요';
+  }catch(e){ document.getElementById('hint3').textContent='저장 중 문제가 생겼어요. 다시 시도해 주세요'; }
+  btn.innerHTML='<svg width="18" height="18" viewBox="0 0 24 24" fill="#5a4410"><path d="M12 16l-5-5h3V4h4v7h3l-5 5zm-7 2h14v2H5z"/></svg> 음원 파일 내려받기';
+});
+
+/* OfflineAudioContext로 18초 믹스 렌더 → WAV */
+async function renderWav(){
+  const sr=44100, dur=18;
+  const oac=new OfflineAudioContext(2, sr*dur, sr);
+  const master=oac.createGain(); master.gain.value=0.9; master.connect(oac.destination);
+  const active=SPOTS.filter(s=>captured[s.id]&&layerOn[s.id]);
+  // 합성 버퍼는 현재 ac() 기준이라 OAC용으로 재생성
+  for(const s of active){
+    const buf = captured[s.id].isMic ? captured[s.id].buffer : synthFor(oac,s.id,8);
+    const src=oac.createBufferSource(); src.buffer=resampleInto(oac,buf); src.loop=true;
+    const g=oac.createGain(); g.gain.value=0.55; src.connect(g); g.connect(master); src.start();
+  }
+  if(bgChoice!=='none'){ const b=synthFor(oac,bgChoice,8,true); const src=oac.createBufferSource(); src.buffer=b; src.loop=true; const g=oac.createGain(); g.gain.value=0.4; src.connect(g); g.connect(master); src.start(); }
+  const rendered=await oac.startRendering();
+  return wavBlob(rendered);
+}
+function synthFor(ctxLike,id,sec,isBg){
+  // OAC에서도 같은 알고리즘으로 생성
+  const sr=44100; const buf=ctxLike.createBuffer(1,Math.floor(sr*sec),sr); const d=buf.getChannelData(0);
+  const fn=isBg?BG_SYNTH[id]:SYNTH[id];
+  // 임시: 기존 fn은 ac() 사용 → 데이터만 복사
+  const tmp = fn(sec); const td=tmp.getChannelData(0);
+  for(let i=0;i<d.length;i++) d[i]=td[i%td.length];
+  return buf;
+}
+function resampleInto(ctxLike,buf){
+  if(buf.sampleRate===ctxLike.sampleRate) return buf;
+  const nb=ctxLike.createBuffer(buf.numberOfChannels, Math.floor(buf.duration*ctxLike.sampleRate), ctxLike.sampleRate);
+  for(let c=0;c<buf.numberOfChannels;c++){const o=buf.getChannelData(c);const n=nb.getChannelData(c);
+    for(let i=0;i<n.length;i++){n[i]=o[Math.floor(i*o.length/n.length)];}}
+  return nb;
+}
+function wavBlob(abuf){
+  const ch=abuf.numberOfChannels, len=abuf.length*ch*2+44, sr=abuf.sampleRate;
+  const ab=new ArrayBuffer(len), v=new DataView(ab); let p=0;
+  const ws=s=>{for(let i=0;i<s.length;i++)v.setUint8(p++,s.charCodeAt(i));};
+  const w16=x=>{v.setUint16(p,x,true);p+=2;}; const w32=x=>{v.setUint32(p,x,true);p+=4;};
+  ws('RIFF');w32(len-8);ws('WAVE');ws('fmt ');w32(16);w16(1);w16(ch);w32(sr);w32(sr*ch*2);w16(ch*2);w16(16);ws('data');w32(abuf.length*ch*2);
+  const chans=[]; for(let c=0;c<ch;c++)chans.push(abuf.getChannelData(c));
+  for(let i=0;i<abuf.length;i++)for(let c=0;c<ch;c++){let s=Math.max(-1,Math.min(1,chans[c][i]));v.setInt16(p,s<0?s*0x8000:s*0x7FFF,true);p+=2;}
+  return new Blob([ab],{type:'audio/wav'});
+}
+
+updateNext();
+</script>
+</body>
+</html>
