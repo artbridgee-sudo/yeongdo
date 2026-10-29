@@ -1,0 +1,16 @@
+{
+  "name": "들리는 대로 번역",
+  "short_name": "들리는대로",
+  "description": "마이크로 들리는 말을 받아 적고 바로 번역해 보여줍니다.",
+  "lang": "ko",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#ECEFF3",
+  "theme_color": "#2347C4",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
