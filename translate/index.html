@@ -117,7 +117,9 @@ select{appearance:none;-webkit-appearance:none;width:100%;min-width:0;height:44p
 .entry.example{opacity:.6}
 .entry.live{border-bottom:0}
 .entry.live .orig{color:var(--faint)}
-.entry.live .tr{color:var(--muted);font-weight:400}
+.entry.live .tr:empty::before{content:"번역 중…";color:var(--faint);font-weight:400}
+.live-tag{display:inline-flex;align-items:center;gap:6px;color:var(--live);font-weight:500;letter-spacing:.06em}
+.live-tag::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;animation:blink 1.2s steps(1) infinite}
 .small-btn{border:1px solid var(--line);background:none;border-radius:8px;padding:6px 12px;font-size:.85rem}
 .caret{display:inline-block;width:.45em;height:1em;margin-left:3px;vertical-align:-.12em;background:currentColor;animation:blink 1s steps(1) infinite}
 @keyframes blink{50%{opacity:0}}
@@ -166,7 +168,7 @@ select{appearance:none;-webkit-appearance:none;width:100%;min-width:0;height:44p
   .big{padding:0 10px}
 }
 @media (prefers-reduced-motion:reduce){
-  .caret{animation:none}
+  .caret,.live-tag::before{animation:none}
   .mic,.onair{transition:none}
 }
 </style>
@@ -215,7 +217,7 @@ select{appearance:none;-webkit-appearance:none;width:100%;min-width:0;height:44p
     <div class="scroller" id="scroller">
       <div class="log">
         <div class="intro" id="intro">
-          <p>들리는 언어를 고르고 아래 마이크 버튼을 누르세요. 알아들은 문장마다 원문과 번역이 차례로 쌓여요.</p>
+          <p>들리는 언어를 고르고 아래 마이크 버튼을 누르세요. 말하는 도중에도 번역이 바로바로 따라 바뀌고, 문장이 끝나면 기록으로 쌓여요.</p>
           <ul>
             <li>처음 한 번은 마이크를 써도 되는지 물어봐요. <b>허용</b>을 눌러 주세요.</li>
             <li>갤럭시는 크롬, 아이폰은 사파리에서 가장 잘 돼요. 인터넷 연결이 필요해요.</li>
@@ -225,7 +227,7 @@ select{appearance:none;-webkit-appearance:none;width:100%;min-width:0;height:44p
         </div>
         <div id="entries"></div>
         <article class="entry live" id="live" hidden>
-          <div class="meta"><span>듣는 중</span></div>
+          <div class="meta"><span class="live-tag">실시간</span></div>
           <p class="orig" id="live-orig"></p>
           <p class="tr" id="live-tr"></p>
         </article>
@@ -415,12 +417,17 @@ select{appearance:none;-webkit-appearance:none;width:100%;min-width:0;height:44p
         }
       })();
     },
-    async translate(text, src, tgt) {
+    // live = a sentence still being spoken. Those calls never fall back to MyMemory (small daily quota)
+    // and pause for a few seconds after a failure so a busy speaker does not hammer the service.
+    coolUntil: 0,
+    async translate(text, src, tgt, live) {
       if (sameLang(src, tgt)) return { text, via: 'same' };
       if (this.translator && this.key === src.tr + '>' + tgt.tr) {
         try { return { text: await this.translator.translate(text), via: 'device' }; } catch (e) { /* fall through */ }
       }
-      try { return { text: await viaGoogle(text, src, tgt), via: 'google' }; } catch (e) { /* fall through */ }
+      if (live && Date.now() < this.coolUntil) throw new Error('cooling down');
+      try { return { text: await viaGoogle(text, src, tgt), via: 'google' }; }
+      catch (e) { if (live) { this.coolUntil = Date.now() + 4000; throw e; } }
       return { text: await viaMyMemory(text, src, tgt), via: 'mymemory' };
     }
   };
@@ -516,7 +523,7 @@ select{appearance:none;-webkit-appearance:none;width:100%;min-width:0;height:44p
     if (wasNear) scroller.scrollTop = scroller.scrollHeight;
   }
 
-  function commit(raw) {
+  function commit(raw, ready) {
     const text = String(raw || '').replace(/\s+/g, ' ').trim();
     if (!text) return;
     if (examplesShown) { list.replaceChildren(); intro.hidden = true; examplesShown = false; }
@@ -527,24 +534,31 @@ select{appearance:none;-webkit-appearance:none;width:100%;min-width:0;height:44p
     entries.push(entry);
     list.append(entry.el.art);
     if (entry.same) { entry.status = 'done'; entry.translation = text; paintTranslation(entry); paintCaption(); }
+    else if (ready) { entry.status = 'done'; entry.translation = ready; paintTranslation(entry); paintCaption(); }
     else translateEntry(entry);
     afterAppend(wasNear);
   }
 
-  // ---------- live (interim) line ----------
+  // ---------- live line: the sentence still being spoken, translated as it grows ----------
   let interimText = '';
   let liveToken = 0;
-  let liveBusy = false;
-  let liveQueued = false;
+  const RT = { busy: false, dirty: false, lastAt: 0, src: '', out: '' };
+  const sameWords = (a, b) => {
+    const n = (s) => String(s || '').toLowerCase().replace(/[\s\p{P}]/gu, '');
+    return n(a) !== '' && n(a) === n(b);
+  };
 
-  function setInterim(text) {
+  function setInterim(raw) {
+    const text = String(raw || '').replace(/\s+/g, ' ').trim();
+    if (text === interimText) return;
     const wasNear = nearBottom();
     interimText = text;
-    if (!text.trim()) {
+    if (!text) {
       liveEl.hidden = true;
       liveOrig.textContent = '';
       liveTr.textContent = '';
       liveToken++;
+      RT.dirty = false;
       paintCaption();
       return;
     }
@@ -554,28 +568,41 @@ select{appearance:none;-webkit-appearance:none;width:100%;min-width:0;height:44p
     caret.className = 'caret';
     caret.setAttribute('aria-hidden', 'true');
     liveOrig.append(caret);
-    if (sameLang(getSrc(), getTgt())) liveTr.textContent = '';
-    else scheduleLive();
+    if (sameLang(getSrc(), getTgt())) liveTr.textContent = text;
+    else requestLive();
     paintCaption();
     if (wasNear) scroller.scrollTop = scroller.scrollHeight;
   }
 
-  function scheduleLive() {
-    if (liveBusy) { liveQueued = true; return; }
-    liveBusy = true;
-    setTimeout(runLive, Engine.translator ? 250 : 900);
+  // One request at a time, always chasing the newest words, at most about three per second.
+  function requestLive() {
+    if (RT.busy) { RT.dirty = true; return; }
+    RT.busy = true;
+    setTimeout(runLive, Math.max(0, 300 - (Date.now() - RT.lastAt)));
   }
   async function runLive() {
-    const text = interimText.trim();
+    const text = interimText;
     const token = liveToken;
+    RT.dirty = false;
+    RT.lastAt = Date.now();
     if (text.length > 1) {
       try {
-        const r = await Engine.translate(text, getSrc(), getTgt());
-        if (token === liveToken && interimText.trim()) { liveTr.textContent = r.text; paintCaption(); }
-      } catch (e) { /* the final line will retry */ }
+        const r = await Engine.translate(text, getSrc(), getTgt(), true);
+        if (token === liveToken) {
+          RT.src = text;
+          RT.out = r.text;
+          if (interimText) { liveTr.textContent = r.text; paintCaption(); }
+          noteVia(r.via);
+        }
+      } catch (e) { /* the finished sentence is translated again */ }
     }
-    liveBusy = false;
-    if (liveQueued) { liveQueued = false; if (interimText.trim()) scheduleLive(); }
+    RT.busy = false;
+    if (RT.dirty && interimText && interimText !== text) requestLive();
+  }
+
+  // A finished sentence reuses the live translation when it holds the same words.
+  function takeLiveTranslation(text) {
+    return sameWords(RT.src, text) ? RT.out : '';
   }
 
   // ---------- big caption mode ----------
@@ -691,7 +718,7 @@ select{appearance:none;-webkit-appearance:none;width:100%;min-width:0;height:44p
   let listening = false;
   let rec = null;
   let restartTimer = 0;
-  let starts = [];
+  let quickFails = 0;
   let netErrors = 0;
   let sessionStarted = false;
 
@@ -710,31 +737,62 @@ select{appearance:none;-webkit-appearance:none;width:100%;min-width:0;height:44p
     paintCaption();
   }
 
+  // Chrome on computers sends each phrase once; Chrome on some phones resends everything heard so far
+  // inside every new result. Joining this way handles both without doubling words.
+  const NO_SPACE = /^(ja|zh|th)/i;
+  const clean = (s) => String(s || '').replace(/\s+/g, ' ').trim();
+  function joinParts(parts, spaced) {
+    let acc = '';
+    for (const raw of parts) {
+      const t = clean(raw);
+      if (!t) continue;
+      if (!acc) { acc = t; continue; }
+      const a = acc.toLowerCase(), b = t.toLowerCase();
+      if (b.startsWith(a)) { acc = t; continue; }
+      if (a.endsWith(b)) continue;
+      acc = acc + (spaced ? ' ' : '') + t;
+    }
+    return acc;
+  }
+  function tailAfter(text, head) {
+    if (!head) return text;
+    if (text.toLowerCase().startsWith(head.toLowerCase())) return clean(text.slice(head.length));
+    let i = 0;
+    const a = text.toLowerCase(), b = head.toLowerCase(), n = Math.min(a.length, b.length);
+    while (i < n && a[i] === b[i]) i++;
+    return i >= b.length * 0.6 ? clean(text.slice(Math.min(head.length, text.length))) : text;
+  }
+
   function openRec() {
     if (!listening) return;
-    const now = Date.now();
-    starts = starts.filter((t) => now - t < 15000);
-    starts.push(now);
-    if (starts.length > 12) { fatal(MSG.loop); return; }
-
     const r = new SR();
+    const sess = { done: '', gotResult: false, startedAt: Date.now() };
     r.lang = getSrc().sr;
-    // Chrome on Android repeats earlier words in continuous mode, so it listens one sentence at a time and restarts.
-    r.continuous = !isAndroid;
+    r.continuous = true;
     r.interimResults = true;
     r.maxAlternatives = 1;
     r.onstart = () => { if (listening && rec === r) { sessionStarted = true; setUI('live'); } };
     r.onresult = (e) => {
       if (rec !== r) return;
+      sess.gotResult = true;
       netErrors = 0;
-      let interim = '';
-      for (let i = e.resultIndex; i < e.results.length; i++) {
+      const spaced = !NO_SPACE.test(r.lang);
+      const parts = [];
+      let lastFinal = -1;
+      for (let i = 0; i < e.results.length; i++) {
         const res = e.results[i];
-        const txt = res[0] ? res[0].transcript : '';
-        if (res.isFinal) { liveToken++; commit(txt); }
-        else interim += txt;
+        parts.push(res[0] ? res[0].transcript : '');
+        if (res.isFinal) lastFinal = i;
       }
-      setInterim(interim);
+      if (lastFinal >= 0) {
+        const finalText = joinParts(parts.slice(0, lastFinal + 1), spaced);
+        if (finalText.length > sess.done.length) {
+          const seg = tailAfter(finalText, sess.done);
+          sess.done = finalText;
+          if (seg) commit(seg, takeLiveTranslation(seg));
+        }
+      }
+      setInterim(tailAfter(joinParts(parts, spaced), sess.done));
     };
     r.onerror = (e) => {
       if (rec !== r) return;
@@ -761,10 +819,20 @@ select{appearance:none;-webkit-appearance:none;width:100%;min-width:0;height:44p
     };
     r.onend = () => {
       if (rec !== r) return;
-      if (interimText.trim()) { const left = interimText; setInterim(''); commit(left); }
+      if (interimText) {
+        const left = interimText;
+        const ready = takeLiveTranslation(left);
+        setInterim('');
+        commit(left, ready);
+      }
       rec = null;
-      if (listening) restartTimer = setTimeout(openRec, 250);
-      else setUI();
+      if (!listening) { setUI(); return; }
+      // Browsers end a listening session after silence or a minute or so; reopen at once.
+      // Only sessions that die instantly, again and again, count as a real failure.
+      const quick = !sess.gotResult && Date.now() - sess.startedAt < 2000;
+      quickFails = quick ? quickFails + 1 : 0;
+      if (quickFails >= 6) { fatal(MSG.loop); return; }
+      restartTimer = setTimeout(openRec, quick ? 300 * quickFails : 60);
     };
     rec = r;
     try { r.start(); } catch (e) { /* a start already in flight */ }
@@ -775,7 +843,7 @@ select{appearance:none;-webkit-appearance:none;width:100%;min-width:0;height:44p
     hideNotice();
     listening = true;
     netErrors = 0;
-    starts = [];
+    quickFails = 0;
     sessionStarted = false;
     setUI('starting');
     Engine.prepare(getSrc(), getTgt());
