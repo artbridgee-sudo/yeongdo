@@ -202,10 +202,10 @@
 <script>
 /* ============== 영도 사운드스케이프 데모 ============== */
 const SPOTS = [
-  {id:'industry', name:'깡깡이마을', type:'산업의 소리', desc:'망치 · 용접 · 엔진', icon:'🔨', color:'#c0704a'},
-  {id:'harbor',   name:'남항대교',   type:'항구의 소리', desc:'배 기적 · 항구 소음', icon:'⚓', color:'#3d6e8c'},
-  {id:'life',     name:'흰여울마을', type:'삶의 소리',   desc:'골목 바람 · 발자국', icon:'🚶', color:'#7a9a6b'},
-  {id:'sea',      name:'절영해안',   type:'바다의 소리', desc:'파도 · 갈매기',     icon:'🌊', color:'#2f88a8'},
+  {id:'industry', name:'깡깡이마을',     type:'산업의 소리', desc:'망치 · 용접 · 엔진',   icon:'🔨', color:'#c0704a'},
+  {id:'life',     name:'흰여울문화마을', type:'삶의 소리',   desc:'골목 바람 · 발자국',   icon:'🚶', color:'#7a9a6b'},
+  {id:'sea',      name:'절영해안산책로', type:'바다의 소리', desc:'파도 · 갈매기',       icon:'🌊', color:'#2f88a8'},
+  {id:'haenyeo',  name:'영도해녀촌',     type:'해녀의 소리', desc:'숨비소리 · 잔물결',   icon:'🤿', color:'#3d6e8c'},
 ];
 
 let AC = null;
@@ -231,13 +231,14 @@ const SYNTH = {
       v+=Math.sin(2*Math.PI*60*t)*0.06+Math.sin(2*Math.PI*90*t)*0.04;
       d[i]=v;}
   }),
-  harbor:(sec)=>makeBuffer(sec,(d,sr)=>{
+  haenyeo:(sec)=>makeBuffer(sec,(d,sr)=>{
+    // 잔물결 + 숨비소리(물 위로 올라와 길게 내쉬는 휘파람 같은 숨)
+    let lp=0, ph=0;
     for(let i=0;i<d.length;i++){const t=i/sr;
-      let v=(Math.random()*2-1)*0.05;
-      // 뱃고동(저음 길게)
-      const horn=t%4; if(horn<1.2){const e=Math.sin(Math.PI*horn/1.2); v+=(Math.sin(2*Math.PI*110*t)+Math.sin(2*Math.PI*138*t))*0.18*e;}
-      // 물결 저주파
-      v+=Math.sin(2*Math.PI*40*t)*0.05;
+      const n=Math.random()*2-1; lp+=(n-lp)*0.03;
+      let v=lp*(0.35+0.15*Math.sin(2*Math.PI*0.2*t));
+      const b=t%3.6; if(b<0.9){const e=Math.sin(Math.PI*b/0.9); const f=2100-700*(b/0.9);
+        ph+=2*Math.PI*f/sr; v+=(Math.sin(ph)*0.14+(Math.random()*2-1)*0.03)*e;}
       d[i]=v;}
   }),
   life:(sec)=>makeBuffer(sec,(d,sr)=>{
